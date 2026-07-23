@@ -341,7 +341,7 @@ def build_critique_prompt(draft, scores):
 
 
 def build_refine_prompt(draft, critique):
-    return f"""请根据以下审稿意见，对文案进行精修优化。保留原有格式结构，只改进内容质量：
+    return f"""请根据以下审稿意见，对文案进行精修优化。
 
 【原始文案】
 {draft}
@@ -349,7 +349,12 @@ def build_refine_prompt(draft, critique):
 【审稿意见】
 {critique}
 
-请输出优化后的完整文案（保持原格式结构不变）。重点提升审稿中指出的薄弱环节。"""
+【重要要求】
+- 只输出优化后的完整文案
+- 保持原有格式结构（标题方案/正文/互动引导/推荐标签）
+- 禁止输出任何修改说明、修改记录、优化备注、对比分析
+- 禁止出现"删除""新增""修改""从X→Y""合规"等元描述文字
+- 直接给出最终文案，就像这是你第一次写的一样"""
 
 
 def agent_generate(topic, style, tone, emoji_level, word_count, extra_info, target_audience, status_container):

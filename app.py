@@ -220,6 +220,27 @@ def call_api(api_key, system_prompt, user_prompt):
         raise Exception(f"API错误 {response.code}: {response.message}")
 
 
+def call_api_stream(api_key, system_prompt, user_prompt):
+    dashscope.api_key = api_key
+    responses = Generation.call(
+        model="qwen-plus",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        result_format="message",
+        stream=True,
+        incremental_output=True,
+    )
+    for chunk in responses:
+        if chunk.status_code == 200:
+            content = chunk.output.choices[0].message.content
+            if content:
+                yield content
+        else:
+            raise Exception(f"API错误 {chunk.code}: {chunk.message}")
+
+
 # ===== 侧边栏 =====
 with st.sidebar:
     st.markdown("### 🎨 创作参数")
@@ -266,8 +287,7 @@ with col_input:
     with col_btn1:
         generate_btn = st.button("✨ 生成文案", type="primary", use_container_width=True)
     with col_btn2:
-        score_btn = st.button("📊 评分优化", use_container_width=True,
-                              disabled=st.session_state.generated_result is None)
+        score_btn = st.button("📊 评分优化", use_container_width=True)
 
 with col_output:
     st.markdown("### 📄 生成结果")
@@ -278,26 +298,35 @@ with col_output:
         else:
             user_prompt = build_user_prompt(topic, style, tone, emoji_level,
                                            word_count, extra_info, target_audience)
-            with st.spinner("🚀 正在创作中...AI正在调用爆款方法论"):
-                try:
-                    result = call_api(API_KEY, SYSTEM_PROMPT, user_prompt)
-                    st.session_state.generated_result = result
-                    st.session_state.score_result = None
-                    st.session_state.history.append({
-                        "topic": topic,
-                        "style": style,
-                        "time": datetime.now().strftime("%H:%M"),
-                        "result": result
-                    })
-                except Exception as e:
-                    st.error(f"生成失败：{str(e)}")
+            try:
+                output_area = st.empty()
+                full_result = ""
+                for chunk in call_api_stream(API_KEY, SYSTEM_PROMPT, user_prompt):
+                    full_result += chunk
+                    output_area.markdown(full_result)
+                st.session_state.generated_result = full_result
+                st.session_state.score_result = None
+                st.session_state.history.append({
+                    "topic": topic,
+                    "style": style,
+                    "time": datetime.now().strftime("%H:%M"),
+                    "result": full_result
+                })
+            except Exception as e:
+                st.error(f"生成失败：{str(e)}")
 
-    if score_btn and st.session_state.generated_result:
-        with st.spinner("📊 正在评分分析..."):
+    if score_btn:
+        if not st.session_state.generated_result:
+            st.warning("请先生成文案，再进行评分优化")
+        else:
             try:
                 score_prompt = build_score_prompt(st.session_state.generated_result)
-                score_result = call_api(API_KEY, "你是小红书运营专家，擅长分析文案数据表现。", score_prompt)
-                st.session_state.score_result = score_result
+                score_area = st.empty()
+                full_score = ""
+                for chunk in call_api_stream(API_KEY, "你是小红书运营专家，擅长分析文案数据表现。", score_prompt):
+                    full_score += chunk
+                    score_area.markdown(full_score)
+                st.session_state.score_result = full_score
             except Exception as e:
                 st.error(f"评分失败：{str(e)}")
 

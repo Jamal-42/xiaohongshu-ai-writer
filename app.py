@@ -365,14 +365,24 @@ def agent_generate(topic, style, tone, emoji_level, word_count, extra_info, targ
     user_prompt = build_user_prompt(topic, style, tone, emoji_level, word_count, extra_info, target_audience)
 
     with status_container:
-        thinking_area = st.empty()
+        process_area = st.container()
         output_area = st.empty()
 
-    # === Round 1: 初始生成（展示思考过程）===
-    thinking_area.markdown("🔍 正在检索相关爆款案例...")
-    import time
-    time.sleep(0.5)
-    thinking_area.markdown("📝 正在根据案例生成初稿...")
+    # === 展示检索过程 ===
+    with process_area:
+        st.markdown("##### 🧠 AI 创作思路")
+        step1 = st.empty()
+        step1.markdown(f"""> 🔍 **检索相关爆款案例**
+> 关键词匹配：「{topic}」→ 风格「{style}」
+> 找到 {len(relevant_posts)} 篇高互动参考：
+> • {relevant_posts[0]['title']}（👍{relevant_posts[0]['metrics']['likes']}）
+> • {relevant_posts[1]['title']}（👍{relevant_posts[1]['metrics']['likes']}）
+> • {relevant_posts[2]['title']}（👍{relevant_posts[2]['metrics']['likes']}）""")
+
+    # === Round 1: 初始生成 ===
+    with process_area:
+        step2 = st.empty()
+        step2.markdown("> 📝 **生成初稿中...**  正在融合案例风格 + 你的需求")
 
     draft = ""
     for chunk in call_api_stream(API_KEY, system_prompt, user_prompt):
@@ -380,20 +390,31 @@ def agent_generate(topic, style, tone, emoji_level, word_count, extra_info, targ
 
     # === 规则评分 ===
     scores, total_score = rule_based_score(draft)
-    thinking_area.markdown("🔎 初稿完成，正在审核文案质量...")
+    with process_area:
+        lowest_dim = min(scores, key=scores.get)
+        dim_names = {"title": "标题吸引力", "density": "信息密度", "emotion": "情绪价值", "interaction": "互动潜力", "platform": "平台适配度"}
+        step2.markdown(f"""> 📝 **初稿完成**
+> 质量检测：总分 {total_score:.0f}/50
+> 薄弱项：「{dim_names[lowest_dim]}」仅 {scores[lowest_dim]:.1f} 分，需要加强""")
 
-    # === Round 2: 自我审稿（展示思考过程）===
+    # === Round 2: 自我审稿 ===
+    with process_area:
+        step3 = st.empty()
+        step3.markdown("> 🔎 **审核优化中...**  正在针对薄弱项生成改进方案")
+
     critique_prompt = build_critique_prompt(draft, scores)
     critique = ""
     for chunk in call_api_stream(API_KEY, "你是小红书内容质量审核官，擅长发现文案的薄弱环节。", critique_prompt):
         critique += chunk
 
-    thinking_area.markdown("✨ 发现优化空间，正在精修文案...")
+    with process_area:
+        step3.markdown("> ✅ **审核完成**  发现优化点，正在精修输出最终版本")
 
-    # === Round 3: 精修优化（流式展示最终结果）===
+    # === Round 3: 精修优化（流式展示）===
+    with process_area:
+        st.markdown("---")
     refine_prompt = build_refine_prompt(draft, critique)
     refined = ""
-    thinking_area.empty()
     for chunk in call_api_stream(API_KEY, system_prompt, refine_prompt):
         refined += chunk
         output_area.markdown(refined)

@@ -1,8 +1,14 @@
+import os
 import streamlit as st
 import dashscope
 from dashscope import Generation
 import json
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
+
+API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
 
 st.set_page_config(page_title="AI 小红书文案生成器", page_icon="📝", layout="wide")
 
@@ -217,7 +223,13 @@ def call_api(api_key, system_prompt, user_prompt):
 # ===== 侧边栏 =====
 with st.sidebar:
     st.markdown("### ⚙️ 配置中心")
-    api_key = st.text_input("🔑 通义千问 API Key", type="password")
+    if API_KEY:
+        st.success("✅ API Key 已配置")
+    else:
+        st.error("❌ 未检测到 API Key")
+        st.caption("请在项目根目录创建 `.env` 文件并写入：")
+        st.code("DASHSCOPE_API_KEY=sk-你的密钥", language="text")
+        st.stop()
 
     st.markdown("---")
     st.markdown("### 🎨 创作参数")
@@ -271,16 +283,14 @@ with col_output:
     st.markdown("### 📄 生成结果")
 
     if generate_btn:
-        if not api_key:
-            st.error("请在左侧输入通义千问 API Key")
-        elif not topic:
+        if not topic:
             st.error("请输入主题关键词")
         else:
             user_prompt = build_user_prompt(topic, style, tone, emoji_level,
                                            word_count, extra_info, target_audience)
             with st.spinner("🚀 正在创作中...AI正在调用爆款方法论"):
                 try:
-                    result = call_api(api_key, SYSTEM_PROMPT, user_prompt)
+                    result = call_api(API_KEY, SYSTEM_PROMPT, user_prompt)
                     st.session_state.generated_result = result
                     st.session_state.score_result = None
                     st.session_state.history.append({
@@ -296,7 +306,7 @@ with col_output:
         with st.spinner("📊 正在评分分析..."):
             try:
                 score_prompt = build_score_prompt(st.session_state.generated_result)
-                score_result = call_api(api_key, "你是小红书运营专家，擅长分析文案数据表现。", score_prompt)
+                score_result = call_api(API_KEY, "你是小红书运营专家，擅长分析文案数据表现。", score_prompt)
                 st.session_state.score_result = score_result
             except Exception as e:
                 st.error(f"评分失败：{str(e)}")

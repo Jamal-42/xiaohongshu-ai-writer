@@ -222,16 +222,6 @@ def call_api(api_key, system_prompt, user_prompt):
 
 # ===== 侧边栏 =====
 with st.sidebar:
-    st.markdown("### ⚙️ 配置中心")
-    if API_KEY:
-        st.success("✅ API Key 已配置")
-    else:
-        st.error("❌ 未检测到 API Key")
-        st.caption("请在项目根目录创建 `.env` 文件并写入：")
-        st.code("DASHSCOPE_API_KEY=sk-你的密钥", language="text")
-        st.stop()
-
-    st.markdown("---")
     st.markdown("### 🎨 创作参数")
     style = st.selectbox("文案风格", ["种草推荐", "产品测评", "教程攻略", "日常分享", "避雷吐槽", "好物合集"])
     tone = st.selectbox("语气调性", ["活泼俏皮", "专业理性", "温柔治愈", "犀利直白", "幽默搞笑"])
@@ -347,12 +337,6 @@ with col_output:
         </div>
         """, unsafe_allow_html=True)
 
-# 底部信息
+# 底部
 st.markdown("---")
-col_f1, col_f2, col_f3 = st.columns(3)
-with col_f1:
-    st.caption("🤖 模型：通义千问 qwen-plus")
-with col_f2:
-    st.caption("⚡ 支持：种草/测评/教程/日常/避雷/合集")
-with col_f3:
-    st.caption("📌 提示：生成后可点击「评分优化」获取改进建议")
+st.caption("📌 生成后可点击「评分优化」获取改进建议 · 关键词越具体效果越好")

@@ -361,48 +361,36 @@ def agent_generate(topic, style, tone, emoji_level, word_count, extra_info, targ
 
     # === Round 1: 初始生成 ===
     with status_container:
-        st.markdown("#### 🔄 Agent 迭代过程")
-        st.markdown("**Round 1** · 生成初稿...")
-        r1_area = st.empty()
+        progress_bar = st.progress(0, text="正在创作中...")
 
     draft = ""
     for chunk in call_api_stream(API_KEY, system_prompt, user_prompt):
         draft += chunk
-        r1_area.markdown(draft)
 
     # === 规则评分 ===
     scores, total_score = rule_based_score(draft)
     with status_container:
-        st.markdown(f"**评分** · 初稿得分：**{total_score}/50**")
+        progress_bar.progress(33, text="初稿完成，正在审核优化...")
 
     # === Round 2: 自我审稿 ===
-    with status_container:
-        st.markdown("**Round 2** · AI 自我审稿...")
-        r2_area = st.empty()
-
     critique_prompt = build_critique_prompt(draft, scores)
     critique = ""
     for chunk in call_api_stream(API_KEY, "你是小红书内容质量审核官，擅长发现文案的薄弱环节。", critique_prompt):
         critique += chunk
-        r2_area.markdown(critique)
+
+    with status_container:
+        progress_bar.progress(66, text="审核完成，正在精修文案...")
 
     # === Round 3: 精修优化 ===
-    with status_container:
-        st.markdown("**Round 3** · 根据审稿意见精修...")
-        r3_area = st.empty()
-
     refine_prompt = build_refine_prompt(draft, critique)
     refined = ""
     for chunk in call_api_stream(API_KEY, system_prompt, refine_prompt):
         refined += chunk
-        r3_area.markdown(refined)
 
     # === 终稿评分 ===
     final_scores, final_total = rule_based_score(refined)
     with status_container:
-        improvement = final_total - total_score
-        direction = "📈" if improvement > 0 else "➡️"
-        st.markdown(f"**最终得分：{final_total}/50** {direction} (较初稿{'+'if improvement>0 else ''}{improvement:.1f})")
+        progress_bar.progress(100, text="创作完成 ✅")
 
     return draft, critique, refined, scores, total_score, final_scores, final_total, relevant_posts
 
@@ -462,7 +450,7 @@ st.markdown("""
 st.markdown("""
 <div class="main-header">
     <h1>📝 AI 小红书文案生成器</h1>
-    <p>Agent 多轮迭代 · 爆款案例库检索 · 规则引擎评分 · 个性化学习</p>
+    <p>参考热门爆款 · 智能多轮打磨 · 越用越懂你</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -520,7 +508,7 @@ with col_input:
         差："防晒"
     </div>""", unsafe_allow_html=True)
 
-    generate_btn = st.button("🤖 Agent 智能创作（3轮迭代）", type="primary", use_container_width=True)
+    generate_btn = st.button("✨ 一键生成爆款文案", type="primary", use_container_width=True)
 
     # 反馈区域
     if st.session_state.agent_result:
@@ -543,7 +531,7 @@ with col_output:
         if not topic:
             st.error("请输入主题关键词")
         elif not API_KEY:
-            st.error("未配置 API Key，请在 .env 文件中设置 DASHSCOPE_API_KEY")
+            st.error("服务暂时不可用，请稍后再试")
         else:
             status_container = st.container()
             try:
@@ -551,42 +539,30 @@ with col_output:
                     topic, style, tone, emoji_level, word_count, extra_info, target_audience, status_container
                 )
 
-                st.markdown("---")
-                st.markdown("### 📄 最终文案")
+                # 最终文案（流式展示）
+                st.markdown("### 📄 生成结果")
                 st.markdown(refined)
 
-                # 评分可视化
+                # 质量评分（简洁展示）
                 st.markdown("---")
-                st.markdown("### 📊 质量评分对比")
+                st.markdown(f"### 📊 文案质量评分：{final_total:.0f}/50")
                 dims = ["标题吸引力", "信息密度", "情绪价值", "互动潜力", "平台适配度"]
                 keys = ["title", "density", "emotion", "interaction", "platform"]
                 score_cols = st.columns(5)
                 for i, (dim, key) in enumerate(zip(dims, keys)):
                     with score_cols[i]:
-                        before = scores[key]
-                        after = final_scores[key]
-                        delta = after - before
-                        st.metric(dim, f"{after:.1f}", delta=f"{delta:+.1f}")
-
-                # 参考案例展示
-                st.markdown("---")
-                st.markdown("### 📚 本次检索的参考案例")
-                for post in ref_posts:
-                    st.markdown(f"""<div class="ref-post">
-                        <strong>{post['title']}</strong><br>
-                        <small>👍{post['metrics']['likes']} 📌{post['metrics']['collects']} 💬{post['metrics']['comments']} · {post['style']}</small>
-                    </div>""", unsafe_allow_html=True)
+                        st.metric(dim, f"{final_scores[key]:.1f}")
 
                 # 导出
                 st.markdown("---")
                 col_dl1, col_dl2 = st.columns(2)
                 with col_dl1:
-                    st.download_button("📥 下载最终文案", refined,
+                    st.download_button("📥 下载文案", refined,
                                        file_name=f"xhs_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                                        mime="text/plain", use_container_width=True)
                 with col_dl2:
-                    full_report = f"# 初稿\n{draft}\n\n# 审稿意见\n{critique}\n\n# 最终文案\n{refined}"
-                    st.download_button("📋 下载完整迭代报告", full_report,
+                    st.download_button("📋 下载完整报告",
+                                       f"# 最终文案\n{refined}\n\n---\n# 迭代过程\n## 初稿\n{draft}\n\n## 审稿意见\n{critique}",
                                        file_name=f"xhs_report_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
                                        mime="text/markdown", use_container_width=True)
 
@@ -599,17 +575,13 @@ with col_output:
                 }
 
             except Exception as e:
-                st.error(f"Agent 执行出错：{str(e)}")
+                st.error(f"生成失败，请重试")
 
     elif not st.session_state.agent_result:
         st.markdown("""
         <div style="text-align:center; padding:3rem; color:#999;">
-            <p style="font-size:3rem;">🤖</p>
-            <p><strong>Agent 智能创作流程</strong></p>
-            <p>Round 1：基于案例库检索生成初稿</p>
-            <p>Round 2：AI 自我审稿，发现问题</p>
-            <p>Round 3：根据审稿意见精修输出终稿</p>
-            <br>
-            <p style="font-size:0.85rem; color:#bbb;">输入关键词，点击按钮开始</p>
+            <p style="font-size:3rem;">✨</p>
+            <p><strong>输入关键词，一键生成爆款文案</strong></p>
+            <p>AI 会自动参考热门案例，经过多轮打磨后输出最优结果</p>
         </div>
         """, unsafe_allow_html=True)

@@ -365,29 +365,35 @@ def agent_generate(topic, style, tone, emoji_level, word_count, extra_info, targ
     user_prompt = build_user_prompt(topic, style, tone, emoji_level, word_count, extra_info, target_audience)
 
     with status_container:
-        spinner_area = st.empty()
-        spinner_area.markdown("*正在创作中...*")
+        thinking_area = st.empty()
+        output_area = st.empty()
 
-    # === Round 1: 初始生成（后台静默）===
+    # === Round 1: 初始生成（展示思考过程）===
+    thinking_area.markdown("🔍 正在检索相关爆款案例...")
+    import time
+    time.sleep(0.5)
+    thinking_area.markdown("📝 正在根据案例生成初稿...")
+
     draft = ""
     for chunk in call_api_stream(API_KEY, system_prompt, user_prompt):
         draft += chunk
 
     # === 规则评分 ===
     scores, total_score = rule_based_score(draft)
+    thinking_area.markdown("🔎 初稿完成，正在审核文案质量...")
 
-    # === Round 2: 自我审稿（后台静默）===
+    # === Round 2: 自我审稿（展示思考过程）===
     critique_prompt = build_critique_prompt(draft, scores)
     critique = ""
     for chunk in call_api_stream(API_KEY, "你是小红书内容质量审核官，擅长发现文案的薄弱环节。", critique_prompt):
         critique += chunk
 
-    # === Round 3: 精修优化（流式展示给用户）===
+    thinking_area.markdown("✨ 发现优化空间，正在精修文案...")
+
+    # === Round 3: 精修优化（流式展示最终结果）===
     refine_prompt = build_refine_prompt(draft, critique)
     refined = ""
-    with status_container:
-        spinner_area.empty()
-        output_area = st.empty()
+    thinking_area.empty()
     for chunk in call_api_stream(API_KEY, system_prompt, refine_prompt):
         refined += chunk
         output_area.markdown(refined)

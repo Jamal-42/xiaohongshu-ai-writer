@@ -364,42 +364,36 @@ def agent_generate(topic, style, tone, emoji_level, word_count, extra_info, targ
     system_prompt = build_system_prompt(relevant_posts, user_prefs)
     user_prompt = build_user_prompt(topic, style, tone, emoji_level, word_count, extra_info, target_audience)
 
-    # === Round 1: 初始生成 ===
     with status_container:
-        progress_bar = st.progress(0, text="正在创作中...")
+        output_area = st.empty()
 
+    # === Round 1: 初始生成（流式展示给用户）===
     draft = ""
     for chunk in call_api_stream(API_KEY, system_prompt, user_prompt):
         draft += chunk
+        output_area.markdown(draft)
 
     # === 规则评分 ===
     scores, total_score = rule_based_score(draft)
-    with status_container:
-        progress_bar.progress(33, text="初稿完成，正在审核优化...")
 
-    # === Round 2: 自我审稿 ===
+    # === Round 2: 自我审稿（后台静默）===
+    with status_container:
+        output_area.markdown(draft + "\n\n---\n*正在优化中...*")
+
     critique_prompt = build_critique_prompt(draft, scores)
     critique = ""
     for chunk in call_api_stream(API_KEY, "你是小红书内容质量审核官，擅长发现文案的薄弱环节。", critique_prompt):
         critique += chunk
 
-    with status_container:
-        progress_bar.progress(66, text="审核完成，正在精修文案...")
-
-    # === Round 3: 精修优化（流式输出到前端）===
+    # === Round 3: 精修优化（流式替换展示）===
     refine_prompt = build_refine_prompt(draft, critique)
     refined = ""
-    with status_container:
-        progress_bar.progress(66, text="精修中...")
-        output_area = st.empty()
     for chunk in call_api_stream(API_KEY, system_prompt, refine_prompt):
         refined += chunk
         output_area.markdown(refined)
 
     # === 终稿评分 ===
     final_scores, final_total = rule_based_score(refined)
-    with status_container:
-        progress_bar.progress(100, text="创作完成 ✅")
 
     return draft, critique, refined, scores, total_score, final_scores, final_total, relevant_posts
 
@@ -478,23 +472,21 @@ with st.sidebar:
     word_count = st.selectbox("文案长度", ["短文案（100-200字）", "中等（200-400字）", "长文案（400-600字）"])
 
     st.markdown("---")
-    st.markdown("### 📊 使用统计")
+    st.markdown("### 📜 历史记录")
     stats = get_history_stats()
     if stats["total"] > 0:
-        st.metric("累计生成", f"{stats['total']} 篇")
-        st.metric("平均质量分", f"{stats['avg_score']}/50")
-        if stats["top_styles"]:
-            st.caption(f"最常用风格：{stats['top_styles'][0][0]}")
-    else:
-        st.caption("开始创作后这里会显示你的使用数据")
-
-    st.markdown("---")
-    st.markdown("### 📜 历史记录")
+        st.caption(f"累计生成 {stats['total']} 篇")
     history = get_recent_history(5)
     if history:
         for h in history:
-            st.markdown(f"**{h[1]}** · {h[2]} · {h[3]}/50")
-            st.caption(h[4][:16] if h[4] else "")
+            with st.expander(f"{h[1]} · {h[2]}", expanded=False):
+                conn = sqlite3.connect(DB_PATH)
+                c = conn.cursor()
+                c.execute("SELECT final_result FROM history WHERE id = ?", (h[0],))
+                row = c.fetchone()
+                conn.close()
+                if row:
+                    st.markdown(row[0])
     else:
         st.caption("暂无记录")
 

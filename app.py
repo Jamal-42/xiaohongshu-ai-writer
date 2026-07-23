@@ -307,16 +307,16 @@ def build_user_prompt(topic, style, tone, emoji_level, word_count, extra_info, t
     prompt += """
 请严格按以下结构输出：
 
-## 🏷️ 标题方案（3个，标注公式）
-标题1（公式：XX）：
-标题2（公式：XX）：
-标题3（公式：XX）：
+## 🏷️ 标题方案（3个备选）
+标题1：
+标题2：
+标题3：
 
 ## 📝 正文
 
 ## 💬 互动引导（1-2句）
 
-## 🏷️ 标签策略（8-10个，前3个大流量词，后面长尾精准词）
+## 🏷️ 推荐标签（8-10个）
 """
     return prompt
 
@@ -381,11 +381,15 @@ def agent_generate(topic, style, tone, emoji_level, word_count, extra_info, targ
     with status_container:
         progress_bar.progress(66, text="审核完成，正在精修文案...")
 
-    # === Round 3: 精修优化 ===
+    # === Round 3: 精修优化（流式输出到前端）===
     refine_prompt = build_refine_prompt(draft, critique)
     refined = ""
+    with status_container:
+        progress_bar.progress(66, text="精修中...")
+        output_area = st.empty()
     for chunk in call_api_stream(API_KEY, system_prompt, refine_prompt):
         refined += chunk
+        output_area.markdown(refined)
 
     # === 终稿评分 ===
     final_scores, final_total = rule_based_score(refined)
@@ -539,32 +543,11 @@ with col_output:
                     topic, style, tone, emoji_level, word_count, extra_info, target_audience, status_container
                 )
 
-                # 最终文案（流式展示）
-                st.markdown("### 📄 生成结果")
-                st.markdown(refined)
-
-                # 质量评分（简洁展示）
+                # 最终文案已经通过流式输出展示了，这里只放下载按钮
                 st.markdown("---")
-                st.markdown(f"### 📊 文案质量评分：{final_total:.0f}/50")
-                dims = ["标题吸引力", "信息密度", "情绪价值", "互动潜力", "平台适配度"]
-                keys = ["title", "density", "emotion", "interaction", "platform"]
-                score_cols = st.columns(5)
-                for i, (dim, key) in enumerate(zip(dims, keys)):
-                    with score_cols[i]:
-                        st.metric(dim, f"{final_scores[key]:.1f}")
-
-                # 导出
-                st.markdown("---")
-                col_dl1, col_dl2 = st.columns(2)
-                with col_dl1:
-                    st.download_button("📥 下载文案", refined,
-                                       file_name=f"xhs_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                                       mime="text/plain", use_container_width=True)
-                with col_dl2:
-                    st.download_button("📋 下载完整报告",
-                                       f"# 最终文案\n{refined}\n\n---\n# 迭代过程\n## 初稿\n{draft}\n\n## 审稿意见\n{critique}",
-                                       file_name=f"xhs_report_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
-                                       mime="text/markdown", use_container_width=True)
+                st.download_button("📥 下载文案", refined,
+                                   file_name=f"xhs_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                                   mime="text/plain", use_container_width=True)
 
                 # 存入数据库
                 history_id = save_history(topic, style, tone, target_audience, refined, int(final_total))

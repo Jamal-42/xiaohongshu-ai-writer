@@ -365,29 +365,29 @@ def agent_generate(topic, style, tone, emoji_level, word_count, extra_info, targ
     user_prompt = build_user_prompt(topic, style, tone, emoji_level, word_count, extra_info, target_audience)
 
     with status_container:
-        output_area = st.empty()
+        spinner_area = st.empty()
+        spinner_area.markdown("*正在创作中...*")
 
-    # === Round 1: 初始生成（流式展示给用户）===
+    # === Round 1: 初始生成（后台静默）===
     draft = ""
     for chunk in call_api_stream(API_KEY, system_prompt, user_prompt):
         draft += chunk
-        output_area.markdown(draft)
 
     # === 规则评分 ===
     scores, total_score = rule_based_score(draft)
 
     # === Round 2: 自我审稿（后台静默）===
-    with status_container:
-        output_area.markdown(draft + "\n\n---\n*正在优化中...*")
-
     critique_prompt = build_critique_prompt(draft, scores)
     critique = ""
     for chunk in call_api_stream(API_KEY, "你是小红书内容质量审核官，擅长发现文案的薄弱环节。", critique_prompt):
         critique += chunk
 
-    # === Round 3: 精修优化（流式替换展示）===
+    # === Round 3: 精修优化（流式展示给用户）===
     refine_prompt = build_refine_prompt(draft, critique)
     refined = ""
+    with status_container:
+        spinner_area.empty()
+        output_area = st.empty()
     for chunk in call_api_stream(API_KEY, system_prompt, refine_prompt):
         refined += chunk
         output_area.markdown(refined)
